@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<script src="js/library/jquery-3.1.1.min.js"
+        integrity="sha256-hVVnYaiADRTO2PzUGmuLJr8BLUSjGIZsDYGmIJLv2b8="></script>
+<script src="js/library/jquery.xdomainajax.js"></script>
+<link rel="stylesheet" type="text/css" href="semantic/dist/semantic.min.css">
+<script src="semantic/dist/semantic.min.js"></script>
+<head>
+    <meta charset="UTF-8">
+    <title>AQ3D DNs - Forum Post Generator</title>
+</head>
+<body>
+<div style="padding: 30px">
+    <div style="padding: 0px 0px 30px 0px">
+        <h1>AQ3D Design Notes - Forum Post Generator</h1>
+        <p>
+            This tool helps with creating AQ3D Design Notes posts on the forums.<br>
+            Just copy the page source of the Design Notes post, paste it into the Source Text box, and click Generate!
+        </p>
+    </div>
+    <div class="ui form" style="width: 60%; margin: 0px 0px 20px 0px">
+        <div class="field">
+            <p>
+                <b>Source Text</b><br>
+                Right Click -> View Page Source -> Select All -> Copy -> Paste
+            </p>
+            <textarea id="sourceText" rows="5"></textarea>
+        </div>
+        <button id="generatePostButton" class="ui teal button" style="margin: 0px 0px 20px 0px">Generate Post</button>
+    </div>
+    <div class="ui form" style="width: 60%; margin: 0px 0px 40px 0px">
+        <div class="field">
+            <p>
+                <b>Forum Post</b>
+            </p>
+            <textarea id="titleText" rows="1" style="margin: 0px 0px 10px 0px"></textarea>
+            <textarea id="formattedPostText" rows="10"></textarea>
+        </div>
+    </div>
+    <p>
+        Created by WhiteTiger. Problem? <a href="https://twitter.com/WhiteTigerAE">Contact me</a> or
+        <a href="https://github.com/WhiteTigerAE/aq3d-design-notes-forum-post-generator">fix it yourself!</a>
+    </p>
+</div>
+</body>
+<script>
+    $(document).ready(function () {
+        var sourceText;
+        var title, date, authorLine;
+        var formattedContent = "";
+        var openListBracket = false;
+
+        $("#generatePostButton").click(function () {
+            resetValues();
+            sourceText = $("#sourceText").val();
+            parseText();
+        });
+
+        function resetValues() {
+            sourceText = "";
+            title = "";
+            authorLine = "";
+            formattedContent = "";
+            openListBracket = false;
+        }
+
+        function parseText() {
+            // Trim beginning and end to only keep design notes post
+            var startIndex = sourceText.indexOf("newsPost");
+            var endIndex = sourceText.indexOf("footnews");
+            sourceText = sourceText.substring(startIndex, endIndex);
+
+            var line = nextLine();
+            while (line !== null) {
+                parseLine(line);
+                line = nextLine();
+            }
+
+            formatPost();
+        }
+
+        function nextLine() {
+            var endIndex = sourceText.indexOf("\n");
+            if (endIndex === -1) {
+                return null;
+            } else {
+                var string = sourceText.substring(0, endIndex);
+                sourceText = sourceText.substring(endIndex + 1);
+                return string;
+            }
+        }
+
+        function parseLine(line) {
+            var startIndex, endIndex;
+            var text;
+
+            if (line.indexOf("<h1") !== -1) {
+                console.log("Post Title");
+
+                // This line is the post title
+                startIndex = line.indexOf(">") + 1;
+                endIndex = line.indexOf("</h1>");
+                title = line.substring(startIndex, endIndex);
+
+                console.log(title);
+            } else if (line.indexOf("authorName") !== -1) {
+                console.log("Author Name");
+
+                // This line is the author name
+                startIndex = line.indexOf("\"authorName\">") + 13;
+                endIndex = line.indexOf("</strong>");
+
+                // Remove leading spaces
+                while (line.charAt(startIndex) === ' ') {
+                    startIndex++;
+                }
+
+                authorLine = line.substring(startIndex, endIndex);
+
+                // Concatenate the date
+                startIndex = line.indexOf("|");
+                authorLine += line.substring(startIndex);
+
+                startIndex = startIndex + 2;
+                var dateStartIndex = line.substring(startIndex).indexOf(" ") + 1;
+                date = line.substring(startIndex).substring(dateStartIndex);
+
+                console.log(authorLine);
+            } else if (line.indexOf("<h2") !== -1) {
+                console.log("Heading");
+
+                // This is a heading inside the post
+                startIndex = line.indexOf(">") + 1;
+                endIndex = line.indexOf("</h2>");
+
+                text = line.substring(startIndex, endIndex);
+                formattedContent += "\n[size=2][b]" + text + "[/b][/size]\n";
+
+                console.log(text);
+            } else if (line.indexOf("<p") !== -1) {
+                console.log("Paragraph");
+
+                if (line.indexOf("<img") !== -1) {
+                    console.log("Image");
+
+                    // This is an image
+                    startIndex = line.indexOf("src=") + 5;
+                    endIndex = line.substring(startIndex).indexOf("\"");
+
+                    text = line.substring(startIndex).substring(0, endIndex);
+
+                    if (line.indexOf("href") !== -1) {
+                        // Image has a link
+                        startIndex = line.indexOf("href=") + 6;
+                        endIndex = line.substring(startIndex).indexOf("\"");
+                        var link = line.substring(startIndex).substring(0, endIndex);
+
+                        formattedContent += "\n[link=" + formatLink(link) + "][image]https://aq3d.com" + text + "[/image][/link]\n";
+                    } else {
+                        formattedContent += "\n[image]https://aq3d.com" + text + "[/image]\n";
+                    }
+
+                    console.log(text);
+                } else {
+                    console.log("Text");
+
+                    // This is a block of text
+                    startIndex = line.indexOf(">") + 1;
+                    endIndex = line.indexOf("</p>");
+
+                    if (openListBracket) {
+                        text = "[*] " + formatTextBlock(line.substring(startIndex, endIndex)) + "\n";
+                    } else {
+                        text = "\n" + formatTextBlock(line.substring(startIndex, endIndex)) + "\n";
+                    }
+                    formattedContent += text;
+
+                    console.log(text);
+                }
+            } else if (line.indexOf("<ul") !== -1) {
+                // Unordered List Start
+                formattedContent += "\n[ul]\n";
+            } else if (line.indexOf("</ul") !== -1) {
+                // Unordered List End
+                formattedContent += "[/ul]\n";
+            }  else if (line.indexOf("<ol") !== -1) {
+                // Ordered List Start
+                formattedContent += "\n[ol]\n";
+            } else if (line.indexOf("</ol") !== -1) {
+                // Ordered List End
+                formattedContent += "[/ol]\n";
+            } else if (line.indexOf("<li") !== -1) {
+                // Start List Item
+                openListBracket = true;
+            } else if (line.indexOf("</li") !== -1) {
+                // End List Item
+                openListBracket = false;
+            } else {
+                console.log("No Match");
+            }
+        }
+
+        function formatLink(link) {
+            var formattedLink = link;
+
+            // And Sign
+            formattedLink = formattedLink.replace(/&amp;/g, "&");
+
+            // Relative URL
+            if (formattedLink.charAt(0) === '/') {
+                formattedLink = "https://aq3d.com" + formattedLink;
+            }
+
+            return formattedLink;
+        }
+
+        function formatTextBlock(text) {
+            var formattedText = text;
+
+            // And Sign
+            formattedText = formattedText.replace(/&amp;/g, "&");
+
+            // Line Breaks
+            formattedText = formattedText.replace(/<br>/g, "\n");
+
+            // Links
+            formattedText = formattedText.replace(/<\/a>/g, "[/link]");
+            while (formattedText.indexOf("<a href=") !== -1) {
+                var startIndex = formattedText.indexOf("href=") + 6;
+                var endIndex = formattedText.substring(startIndex).indexOf("\"");
+                var link = formattedText.substring(startIndex).substring(0, endIndex);
+
+                var index1 = formattedText.indexOf("<a href=");
+                var index2 = formattedText.substring(index1).indexOf(">") + 1;
+
+                console.log("LINK");
+                console.log("before link: " + formattedText.substring(0, startIndex));
+                console.log("after link: " + formattedText.substring(index1).substring(index2));
+
+                formattedText =
+                    formattedText.substring(0, index1) // Everything before the link
+                    + "[link=" + formatLink(link) + "]" // The link itself
+                    + formattedText.substring(index1).substring(index2); // Everything after the link
+            }
+
+            // Italics
+            formattedText = formattedText.replace(/<em>/g, "[i]");
+            formattedText = formattedText.replace(/<\/em>/g, "[/i]");
+
+            // Bold
+            formattedText = formattedText.replace(/<strong>/g, "[b]");
+            formattedText = formattedText.replace(/<\/strong>/g, "[/b]");
+
+            // Remove all other html tags
+            if (formattedText.indexOf('<') !== -1) {
+                formattedText = $(formattedText).text();
+            }
+
+            return formattedText;
+        }
+
+        function formatPost() {
+            var formattedTitle = "=AQ3D= News " + date + ": " + title;
+            var formattedPost = "";
+            formattedPost += "[quote]";
+            formattedPost += "[b]" + authorLine + "[/b]\n";
+            formattedPost += formattedContent;
+            formattedPost += "[/quote]";
+
+            document.getElementById("titleText").value = formattedTitle;
+            document.getElementById("formattedPostText").value = formattedPost;
+        }
+    });
+</script>
+</html>
