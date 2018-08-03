@@ -190,8 +190,19 @@
                 // Ordered List End
                 formattedContent += "[/ol]\n";
             } else if (line.indexOf("<li") !== -1) {
-                // Start List Item
+                // Start List Item, if <li> is on its own line
                 openListBracket = true;
+
+                startIndex = line.indexOf(">") + 1;
+                text = line.substring(startIndex);
+
+                // Check if <li></li> is on a single line
+                if (text.indexOf("</li") !== -1) {
+                    openListBracket = false;
+                    text = text.replace("</li>", "");
+                    console.log(text);
+                }
+                formattedContent += "[*] " + formatTextHtml(text) + "\n";
             } else if (line.indexOf("</li") !== -1) {
                 // End List Item
                 openListBracket = false;
